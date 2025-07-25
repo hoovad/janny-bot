@@ -1,3 +1,4 @@
 env.rb
 database.db
 Gemfile.lock
+.idea
