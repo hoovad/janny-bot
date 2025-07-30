@@ -1,6 +1,6 @@
 # janny-bot
 
-[Licensed under the EUPL-1.2 license](LICENSE)
+[![Licensed under the EUPL-1.2 license](https://img.shields.io/github/license/hoovad/janny-bot)](LICENSE)
 
 W.I.P. General purpose moderation bot for Discord written in Ruby using my own Discord API wrapper [(discord.rb)](https://github.com/hoovad/discord.rb).
 
