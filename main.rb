@@ -55,10 +55,10 @@ discordapi.create_global_application_command('kick', description: 'Kicks a user 
 discordapi.create_global_application_command('cases', description: 'Gets the cases of a user (kicks, bans, etc.)',
                                                       options: [{ type: 3, name: 'user',
                                                                   description: 'The user to get cases for' \
-                                                                    ' (either mention the user, type in just their' \
-                                                                    ' full username (has some limitations)' \
-                                                                    ', or user ID. Don\'t specify to)' \
-                                                                    ' get your own cases.' }],
+                                                                    ' (mention,' \
+                                                                    ' username (has limitations)' \
+                                                                    ', or user ID. Empty' \
+                                                                    ' for your cases.)' }],
                                                       contexts: [0])
 # noinspection RubyScope
 discordapi.connect_gateway(activities: { name: 'the naughty', type: 3 }, presence_status: 'online', presence_afk: false,
