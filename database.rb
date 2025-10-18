@@ -10,31 +10,39 @@ class DatabaseHandler
     @db.results_as_hash = true
     @db.execute <<-SQL
       CREATE TABLE IF NOT EXISTS bans (
-        id INTEGER PRIMARY KEY,
-        username TEXT NOT NULL,
-        until INTEGER
+        id INTEGER PRIMARY KEY NOT NULL,
+        username TEXT,
+        until INTEGER,
+        reason TEXT
       );
     SQL
     @db.execute <<-SQL
       CREATE TABLE IF NOT EXISTS cases (
-          id INTEGER PRIMARY KEY,
-          username TEXT NOT NULL,
+          id INTEGER PRIMARY KEY NOT NULL,
+          username TEXT,
           cases TEXT NOT NULL
       );
     SQL
   end
 
-  def add_ban(id, username, until_time = nil)
-    @db.execute('INSERT INTO bans (id, username, until) VALUES (?, ?, ?)', [id, username, until_time])
+  def add_ban(id, username: nil, until_time: nil, reason: nil)
+    existing_ban = @db.get_first_value('SELECT * FROM bans WHERE id = ?', [id])
+    if existing_ban
+      @db.execute('UPDATE bans SET username = ?, until = ?, reason = ? WHERE id = ?',
+                  [username, until_time, reason, id])
+    else
+      @db.execute('INSERT INTO bans (id, username, until, reason) VALUES (?, ?, ?, ?)',
+                  [id, username, until_time, reason])
+    end
   end
 
-  def update_cases(id, username, cases)
-    existing_cases = @db.get_first_value('SELECT cases FROM cases WHERE id = ?', [id])
+  def update_cases(id, cases, username: nil)
+    existing_cases = @db.get_first_value('SELECT * FROM cases WHERE id = ?', [id])
     cases = JSON.generate(cases)
     if existing_cases
-      @db.execute('INSERT INTO cases (id, username, cases) VALUES (?, ?, ?)', [id, username, cases])
+      @db.execute('UPDATE cases SET cases = ?, username = ? WHERE id = ?', [cases, username, id])
     else
-      @db.execute('UPDATE cases SET cases = ? WHERE id = ?', [cases, id])
+      @db.execute('INSERT INTO cases (id, username, cases) VALUES (?, ?, ?)', [id, username, cases])
     end
   end
 
@@ -44,18 +52,24 @@ class DatabaseHandler
     elsif username
       cases = @db.get_first_value('SELECT cases FROM cases WHERE username = ?', [username])
     end
-    if cases
-      JSON.parse(cases)
-    else
-      cases
+    return unless cases
+
+    JSON.parse(cases)
+  end
+
+  def query_bans(id: nil, username: nil)
+    if id
+      @db.execute('SELECT * FROM bans WHERE id = ?', [id])
+    elsif username
+      @db.execute('SELECT * FROM bans WHERE username = ?', [username])
     end
   end
 
-  def query_bans(id)
-    @db.execute('SELECT * FROM bans WHERE id = ?', [id])
-  end
-
-  def delete_ban(id)
-    @db.execute('DELETE FROM bans WHERE id = ?', [id])
+  def delete_ban(id: nil, username: nil)
+    if id
+      @db.execute('DELETE FROM bans WHERE id = ?', [id])
+    elsif username
+      @db.execute('DELETE FROM bans WHERE username = ?', [username])
+    end
   end
 end
