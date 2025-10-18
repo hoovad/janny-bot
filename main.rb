@@ -92,7 +92,7 @@ discordapi.connect_gateway(activities: { name: 'the naughty', type: 3 }, presenc
                  else
                    discordapi.create_guild_ban(interaction[:d][:guild_id], interaction[:d][:data][:options][0][:value])
                  end
-      if response.code == '204'
+      if response.status == 204
         discordapi.logger.debug(discordapi.respond_interaction(interaction, {
                                                                  "type": 4,
                                                                  "data": {
