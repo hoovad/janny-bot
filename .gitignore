@@ -2,3 +2,4 @@ env.rb
 database.db
 Gemfile.lock
 .idea
+.ruby-lsp
