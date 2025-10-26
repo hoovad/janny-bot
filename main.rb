@@ -6,7 +6,7 @@ require 'disrb'
 require 'time'
 
 def get_user_status(discordapi, dbh, guild_id, user_id)
-  if (guild_ban = dbh.query_bans(id: user_id)).empty?
+  if (guild_ban = dbh.query_bans(guild_id, id: user_id)).empty?
     guild_ban = discordapi.get_guild_ban(guild_id, user_id)
     guild_ban = if guild_ban.status == 200 && JSON.parse(guild_ban.body)['reason'].nil?
                   'Not provided'
@@ -74,7 +74,7 @@ discordapi.connect_gateway(activities: { name: 'the naughty', type: 3 }, presenc
   discordapi.logger.info('Responding to interaction')
   if interaction[:d][:data][:name] == 'ban'
     if DiscordApi.reverse_permissions_integer(interaction[:d][:member][:permissions].to_i).include?(:ban_members)
-      # i shouldn't hardcode the bot's ID but for now it's fine
+      # i shouldn't hardcode the bot's ID but we can't since we cannot capture the READY event that contains it yet
       if interaction[:d][:data][:options][0][:value] == '1391348426624471110'
         discordapi.logger.debug(discordapi.respond_interaction(interaction, {
                                                                  "type": 4,
@@ -94,36 +94,52 @@ discordapi.connect_gateway(activities: { name: 'the naughty', type: 3 }, presenc
                                                                }))
         next
       end
+      dm_channel_id = discordapi.create_dm(interaction[:d][:data][:options][0][:value])
+      if dm_channel_id.status == 200
+        dm_channel_id = JSON.parse(dm_channel_id.body)['id']
+        server_name = JSON.parse(discordapi.get_guild(interaction[:d][:guild_id]).body)['name']
+        dm_message = if interaction[:d][:data][:options][1]
+                       discordapi.create_message(dm_channel_id, content: ':hammer: Uh oh! You have been ' \
+                         "banned from `#{server_name}`.\nReason: `#{interaction[:d][:data][:options][1][:value]}`." \
+                         "\nDuration: `permanent`.")
+                     else
+                       discordapi.create_message(dm_channel_id, content: ':hammer: Uh oh! You have been ' \
+                         "banned from `#{server_name}`.\nReason: Not provided." \
+                         "\nDuration: `permanent`.")
+                     end
+      end
       response = if interaction[:d][:data][:options][1]
-                   discordapi.create_guild_ban(interaction[:d][:guild_id], interaction[:d][:data][:options][0][:value],
+                   discordapi.create_guild_ban(interaction[:d][:guild_id],
+                                               interaction[:d][:data][:options][0][:value],
                                                audit_reason: interaction[:d][:data][:options][1][:value])
                  else
-                   discordapi.create_guild_ban(interaction[:d][:guild_id], interaction[:d][:data][:options][0][:value])
+                   discordapi.create_guild_ban(interaction[:d][:guild_id],
+                                               interaction[:d][:data][:options][0][:value])
                  end
       if response.status == 204
         message = ':white_check_mark: Banned user successfully!'
-        dm_channel_id = discordapi.create_dm(interaction[:d][:data][:options][0][:value])
-        if dm_channel_id.status == 200
-          dm_channel_id = JSON.parse(dm_channel_id.body)['id']
-          server_name = JSON.parse(discordapi.get_guild(interaction[:d][:guild_id]).body)['name']
-          dm_message = if interaction[:d][:data][:options][1]
-                         discordapi.create_message(dm_channel_id, content: ':hammer: Uh oh! You have been ' \
-                           "banned from `#{server_name}`.\nReason: `#{interaction[:d][:data][:options][1][:value]}`." \
-                           "\nDuration: `permanent`.")
-                       else
-                         discordapi.create_message(dm_channel_id, content: ':hammer: Uh oh! You have been ' \
-                           "banned from `#{server_name}`.\nReason: Not provided." \
-                           "\nDuration: `permanent`.")
-                       end
-          discordapi.logger.debug(dm_message)
-          message += "\n:warning: However, I was unable to send a DM to the user." if dm_message.status != 200
-        end
+        message += "\n:warning: However, I was unable to send a DM to the user." if dm_message.status != 200
         discordapi.logger.debug(discordapi.respond_interaction(interaction, {
                                                                  "type": 4,
                                                                  "data": {
                                                                    "content": message
                                                                  }
                                                                }))
+        username = discordapi.get_user(interaction[:d][:data][:options][0][:value])
+        if username.status == 200
+          username = JSON.parse(username)
+          username = "#{username['username']}##{username['discriminator']}"
+        else
+          username = nil
+        end
+        if interaction[:d][:data][:options][1]
+          dh.add_ban(interaction[:d][:data][:options][0][:value],
+                     interaction[:d][:guild_id],
+                     username: username,
+                     reason: interaction[:d][:data][:options][1][:value])
+        else
+          dh.add_ban(interaction[:d][:data][:options][0][:value], interaction[:d][:guild_id], username: username)
+        end
       else
         discordapi.logger.debug(discordapi.respond_interaction(interaction, {
                                                                  "type": 4,
@@ -165,6 +181,19 @@ discordapi.connect_gateway(activities: { name: 'the naughty', type: 3 }, presenc
                                                                }))
         next
       end
+      dm_channel_id = discordapi.create_dm(interaction[:d][:data][:options][0][:value])
+      if dm_channel_id.status == 200
+        dm_channel_id = JSON.parse(dm_channel_id.body)['id']
+        server_name = JSON.parse(discordapi.get_guild(interaction[:d][:guild_id]).body)['name']
+        dm_message = if interaction[:d][:data][:options][1]
+                       discordapi.create_message(dm_channel_id, content: ':hammer: You\'ve been ' \
+                          "kicked from `#{server_name}`.\nReason: `#{interaction[:d][:data][:options][1][:value]}`.")
+                     else
+                       discordapi.create_message(dm_channel_id, content: ':hammer: You\'ve been ' \
+                          "kicked from `#{server_name}`.\nReason: Not provided.")
+                     end
+        discordapi.logger.debug(dm_message)
+      end
       response = if interaction[:d][:data][:options][1]
                    discordapi.remove_guild_member(interaction[:d][:guild_id],
                                                   interaction[:d][:data][:options][0][:value],
@@ -175,20 +204,7 @@ discordapi.connect_gateway(activities: { name: 'the naughty', type: 3 }, presenc
                  end
       if response.status == 204
         message = ':white_check_mark: Kicked user successfully!'
-        dm_channel_id = discordapi.create_dm(interaction[:d][:data][:options][0][:value])
-        if dm_channel_id.status == 200
-          dm_channel_id = JSON.parse(dm_channel_id.body)['id']
-          server_name = JSON.parse(discordapi.get_guild(interaction[:d][:guild_id]).body)['name']
-          dm_message = if interaction[:d][:data][:options][1]
-                         discordapi.create_message(dm_channel_id, content: ':hammer: You\'ve been ' \
-                           "kicked from `#{server_name}`.\nReason: `#{interaction[:d][:data][:options][1][:value]}`.")
-                       else
-                         discordapi.create_message(dm_channel_id, content: ':hammer: You\'ve been ' \
-                           "kicked from `#{server_name}`.\nReason: Not provided.")
-                       end
-          discordapi.logger.debug(dm_message)
-          message += "\n:warning: However, I was unable to send a DM to the user." if dm_message.status != 200
-        end
+        message += "\n:warning: However, I was unable to send a DM to the user." if dm_message.status != 200
         discordapi.logger.debug(discordapi.respond_interaction(interaction, {
                                                                  "type": 4,
                                                                  "data": {
@@ -220,14 +236,14 @@ discordapi.connect_gateway(activities: { name: 'the naughty', type: 3 }, presenc
       case interaction[:d][:data][:options][0][:value]
       when /^<@\d+>$/
         user_id = interaction[:d][:data][:options][0][:value].scan(/<@(\d+)>/).flatten.first.to_i
-        _cases = dh.get_cases(id: user_id)
+        _cases = dh.get_cases(interaction[:d][:guild_id], id: user_id)
       when /^\d+$/
         user_id = interaction[:d][:data][:options][0][:value].to_i
-        _cases = dh.get_cases(id: interaction[:d][:data][:options][0][:value])
+        _cases = dh.get_cases(interaction[:d][:guild_id], id: user_id)
       when /^(?!.*\.\.)([a-z0-9_.]{2,32})$/
         user_id = String.new
         username = interaction[:d][:data][:options][0][:value]
-        _cases = dh.get_cases(username: interaction[:d][:data][:options][0][:value])
+        _cases = dh.get_cases(interaction[:d][:guild_id], username: username)
       else
         discordapi.logger.debug(discordapi.respond_interaction(interaction, {
                                                                  "type": 4,
